@@ -1,7 +1,7 @@
 [project]
-name = "ccpm-simulator"
+name = "ccpm-planner"
 version = "0.1.0"
-description = "Critical Chain Project Management (CCPM) simulator in Python"
+description = "Critical Chain Project Management (CCPM) planner in Python"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

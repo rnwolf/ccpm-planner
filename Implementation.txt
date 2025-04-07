@@ -1,8 +1,10 @@
-# Critical Chain Simulator - Implementation Notes
+# Critical Chain Planner - Implementation Notes
 
 ## Overview
 
 This document explains how the Python implementation relates to the original VBA Excel project, and provides guidance on setting up and using the application.
+
+https://github.com/damiengroff/critical_chain_simulator/
 
 ## Original VBA Project vs. Python Implementation
 
@@ -12,23 +14,23 @@ The original VBA project consisted of:
 - Excel worksheet classes (LOGS.cls, LOGS_AV.cls, LOGS_CCPM.cls, LOGS_FV_CHART.cls)
 - A module with task management functions (marq_pr_suppression.bas)
 
+
+
 In the Python implementation, we've reorganized this into a more object-oriented structure:
 
 1. **Task Class**: Represents a project task with properties like ID, name, duration, resources, predecessors.
 2. **ResourceManager Class**: Manages project resources.
-3. **CriticalChainSimulator Class**: Core simulation engine, handling scheduling, critical chain identification, and buffer calculation.
-4. **CCPMSimulatorGUI Class**: User interface using Tkinter.
+3. **CriticalChainPlanner Class**: Core simulation engine, handling scheduling, critical chain identification, and buffer calculation.
+4. **CCPMPlannerGUI Class**: User interface using Tkinter.
 
 ### Core Functionality Mapping
 
 | VBA Functionality | Python Implementation |
 |-------------------|------------------------|
-| Excel worksheets (LOGS, GANTT) | Replaced with in-memory data structures |
-| `remove_chains_first_task` | Implemented in `CriticalChainSimulator.remove_chains_first_task()` |
-| `update_preds` | Implemented in `CriticalChainSimulator.update_preds()` |
-| `max_fin_preds_reel` | Implemented in `CriticalChainSimulator.max_fin_preds_reel()` |
+ `remove_chains_first_task` | Implemented in `CriticalChainPlanner.remove_chains_first_task()` |
+| `update_preds` | Implemented in `CriticalChainPlanner.update_preds()` |
+| `max_fin_preds_reel` | Implemented in `CriticalChainPlanner.max_fin_preds_reel()` |
 | GANTT diagram | Implemented using matplotlib in `generate_gantt_chart()` |
-| Fever charts | Implemented using matplotlib in `generate_fever_chart()` |
 
 ### Enhanced Features
 
@@ -44,7 +46,7 @@ The Python implementation adds several enhancements:
 
 ### Requirements
 
-To run the Critical Chain Simulator, you'll need:
+To run the Critical Chain Planner, you'll need:
 
 - Python 3.7 or higher
 - Required libraries: pandas, numpy, matplotlib, networkx, tkinter
@@ -62,7 +64,7 @@ Note: Tkinter is included in standard Python distributions but may need to be in
 Execute the Python script to launch the application:
 
 ```bash
-python ccpm_simulator.py
+python main.py
 ```
 
 ## Using the Application
@@ -75,7 +77,6 @@ python ccpm_simulator.py
    - Duration: Time required to complete the task
    - Resources: Comma-separated list of resources needed
    - Predecessors: Comma-separated list of task IDs that must complete before this task can start
-   - Completion: Current progress (0-100%)
 
 2. **Edit Tasks**: Select a task and click "Edit Task" to modify its properties.
 
@@ -101,8 +102,6 @@ python ccpm_simulator.py
    - Update the Gantt chart
 
 2. **Gantt Chart**: View and update the project Gantt chart showing the critical chain in red.
-
-3. **Fever Chart**: Monitor buffer consumption as the project progresses.
 
 ## Advanced Features
 
@@ -138,3 +137,11 @@ To extend this implementation:
 4. **Task Cost Tracking**: Add cost attributes to tasks and resources for budget management.
 
 5. **Enhanced Analytics**: Add more project performance metrics and visualizations.
+
+
+# Reference
+
+
+Might of interest.  Active last month March 2025, but no resource leveling.
+
+https://github.com/ebal5/ccpm_test3

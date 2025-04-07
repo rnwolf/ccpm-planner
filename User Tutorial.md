@@ -1,16 +1,16 @@
-# Critical Chain Simulator - User Tutorial
+# Critical Chain Planner - User Tutorial
 
-This tutorial will guide you through using the Critical Chain Project Management (CCPM) Simulator.
+This tutorial will guide you through using the Critical Chain Project Management (CCPM) Planner.
 
 ## Introduction
 
-The Critical Chain Simulator helps you plan and manage projects using the Critical Chain Project Management methodology. This approach focuses on resource constraints and buffer management to ensure project success.
+The Critical Chain Planner helps you plan and manage projects using the Critical Chain Project Management methodology. This approach focuses on resource constraints and buffer management to ensure project success.
 
 ## Getting Started
 
 1. Launch the application by running:
    ```
-   python ccpm_simulator.py
+   python ccpm_Planner.py
    ```
 
 2. The application opens with four tabs:
@@ -105,11 +105,11 @@ Let's walk through creating a simple software development project:
 ### Managing Task Dependencies
 
 1. Tasks can have multiple predecessors, separated by commas (e.g., "1,3,5").
-2. When you remove a task, the simulator automatically updates predecessors in remaining tasks.
+2. When you remove a task, the Planner automatically updates predecessors in remaining tasks.
 
 ### Resource Leveling
 
-The simulator automatically resolves resource conflicts by:
+The Planner automatically resolves resource conflicts by:
 1. Identifying tasks that require the same resource at the same time
 2. Delaying lower-priority tasks to avoid conflicts
 
@@ -166,6 +166,6 @@ The project buffer is automatically calculated as 50% of the critical chain dura
 
 ## Conclusion
 
-The Critical Chain Simulator provides a visual and interactive way to learn and apply Critical Chain Project Management principles. By focusing on resource constraints and buffer management, you can create more realistic project schedules and effectively track project progress.
+The Critical Chain Planner provides a visual and interactive way to learn and apply Critical Chain Project Management principles. By focusing on resource constraints and buffer management, you can create more realistic project schedules and effectively track project progress.
 
 Happy project planning!
