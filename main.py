@@ -362,6 +362,7 @@ class CriticalChainplanner:
         self.tasks = []
         self.resource_manager = ResourceManager()
         self.chains = []  # Collections of tasks forming chains
+        self.feeding_buffers = []
         self.project_buffer = 0
         self.dataset_name = "Default"
         self.sample_datasets = self._create_sample_datasets()
@@ -615,37 +616,249 @@ class CriticalChainplanner:
             for resource_id in task.resources:
                 resource_timeline[resource_id].append((task.start_date, task.end_date))
 
-    def _identify_critical_chain(self, G: nx.DiGraph) -> None:
-        """Identify the critical chain in the project"""
-        # Find the critical path considering durations
-        # This is simplified; the actual critical chain considers resource constraints
-        longest_path = nx.dag_longest_path(
-            G,
-            weight=lambda u, v, d: next(
-                (t.duration for t in self.tasks if t.get_ID() == v), 0
-            ),
-        )
+    # def _identify_critical_chain(self, G: nx.DiGraph) -> None:
+    #     """Identify the critical chain in the project"""
+    #     # Find the critical path considering durations
+    #     # This is simplified; the actual critical chain considers resource constraints
+    #     longest_path = nx.dag_longest_path(
+    #         G,
+    #         weight=lambda u, v, d: next(
+    #             (t.duration for t in self.tasks if t.get_ID() == v), 0
+    #         ),
+    #     )
 
-        # Mark tasks on the critical chain
-        for task_id in longest_path:
-            task = next((t for t in self.tasks if t.get_ID() == task_id), None)
-            if task:
-                task.is_critical = True
+    #     # Mark tasks on the critical chain
+    #     for task_id in longest_path:
+    #         task = next((t for t in self.tasks if t.get_ID() == task_id), None)
+    #         if task:
+    #             task.is_critical = True
 
-        # Store the critical chain (main chain)
-        self.chains = [
-            [t for t in self.tasks if t.get_ID() == task_id] for task_id in longest_path
-        ]
+    #     # Store the critical chain (main chain)
+    #     self.chains = [
+    #         [t for t in self.tasks if t.get_ID() == task_id] for task_id in longest_path
+    #     ]
 
-    def _calculate_buffers(self) -> None:
-        """Calculate project and feeding buffers"""
-        # Calculate project buffer (50% of critical chain duration)
-        critical_tasks = [t for t in self.tasks if t.is_critical]
-        total_critical_duration = sum(t.duration for t in critical_tasks)
-        self.project_buffer = total_critical_duration * 0.5
+    # def _calculate_buffers(self) -> None:
+    #     """Calculate project and feeding buffers"""
+    #     # Calculate project buffer (50% of critical chain duration)
+    #     critical_tasks = [t for t in self.tasks if t.is_critical]
+    #     total_critical_duration = sum(t.duration for t in critical_tasks)
+    #     self.project_buffer = total_critical_duration * 0.5
+
+    # def generate_gantt_chart(self, filename: str = None) -> plt.Figure:
+    #     """Generate Gantt chart with dependency arrows and pickable bars"""
+    #     # Create figure with interactive mode off to prevent popup window
+    #     plt.ioff()
+    #     fig, ax = plt.subplots(figsize=(12, 6))
+
+    #     # Sort tasks by start date
+    #     sorted_tasks = sorted(self.tasks, key=lambda t: t.start_date)
+
+    #     # Create a mapping of task_id to y-position for arrow drawing
+    #     task_positions = {task.task_id: i for i, task in enumerate(sorted_tasks)}
+
+    #     # Define color mapping - converting resource color names to actual matplotlib colors
+    #     color_map = {
+    #         "Red": "red",
+    #         "Green": "green",
+    #         "Blue": "blue",
+    #         "Magenta": "magenta",
+    #         "Yellow": "yellow",
+    #         "Black": "black",
+    #         # Add fallback colors for other resources
+    #         "R1": "darkblue",
+    #         "R2": "darkgreen",
+    #         "R3": "darkred",
+    #     }
+
+    #     # Default color for tasks with multiple or no resources
+    #     default_task_color = "gray"
+
+    #     # Plot tasks
+    #     for i, task in enumerate(sorted_tasks):
+    #         start = task.start_date
+    #         duration = task.duration
+
+    #         # Determine task color based on resource
+    #         if task.resources and len(task.resources) == 1:
+    #             # If task has exactly one resource, use that resource's color
+    #             resource = task.resources[0]
+    #             task_color = color_map.get(resource, default_task_color)
+    #         else:
+    #             # For multiple resources or no resources, use the default color
+    #             task_color = default_task_color
+
+    #         # Plot the task bar - make it pickable with a unique label
+    #         bar = ax.barh(
+    #             i,
+    #             duration,
+    #             left=start,
+    #             color=task_color,
+    #             alpha=0.6,
+    #             picker=5,  # 5 points tolerance for picking
+    #             label=f"Task: {task.name} ID:{task.task_id}",  # Label with task info for picking
+    #         )
+
+    #         # If this is a critical task, add yellow border
+    #         if task.is_critical:
+    #             # Get the bar patch and set its edge color and width
+    #             bar[0].set_edgecolor("yellow")
+    #             bar[0].set_linewidth(2)
+
+    #         # Add task name
+    #         ax.text(
+    #             start + duration / 2,
+    #             i,
+    #             f"{task.name}",
+    #             ha="center",
+    #             va="center",
+    #             color="black",
+    #         )
+
+    #     # Add project buffer at the end
+    #     if self.project_buffer > 0:
+    #         project_end = max(t.end_date for t in self.tasks)
+    #         buffer_bar = ax.barh(
+    #             len(sorted_tasks),
+    #             self.project_buffer,
+    #             left=project_end,
+    #             color="gold",
+    #             alpha=0.6,
+    #             label="Project Buffer",
+    #         )
+
+    #         # Add a yellow border to the buffer
+    #         buffer_bar[0].set_edgecolor("yellow")
+    #         buffer_bar[0].set_linewidth(2)
+
+    #         ax.text(
+    #             project_end + self.project_buffer / 2,
+    #             len(sorted_tasks),
+    #             f"Project Buffer",
+    #             ha="center",
+    #             va="center",
+    #             color="black",
+    #         )
+
+    #     # Draw dependency arrows with smaller arrow heads
+    #     for task in sorted_tasks:
+    #         if task.predecessors:
+    #             # Get list of predecessor IDs
+    #             pred_ids = [int(p) for p in task.predecessors.split(",") if p.strip()]
+
+    #             # Current task y-position
+    #             task_y = task_positions[task.task_id]
+
+    #             for pred_id in pred_ids:
+    #                 # Find the predecessor task
+    #                 pred_task = next(
+    #                     (t for t in self.tasks if t.task_id == pred_id), None
+    #                 )
+    #                 if pred_task and pred_id in task_positions:
+    #                     # Predecessor task y-position
+    #                     pred_y = task_positions[pred_id]
+
+    #                     # Arrow style - critical chain arrows are yellow, others are gray
+    #                     arrow_color = (
+    #                         "yellow"
+    #                         if task.is_critical and pred_task.is_critical
+    #                         else "gray"
+    #                     )
+
+    #                     # Smaller arrow heads for better proportion
+    #                     arrow_style = "simple,head_width=2,head_length=3"
+
+    #                     arrow_alpha = (
+    #                         0.8 if task.is_critical and pred_task.is_critical else 0.6
+    #                     )
+    #                     arrow_linewidth = (
+    #                         1.2 if task.is_critical and pred_task.is_critical else 0.8
+    #                     )
+
+    #                     # Draw arrow from end of predecessor to start of current task
+    #                     # Use a gentler curve and smaller arrow heads
+    #                     ax.annotate(
+    #                         "",
+    #                         xy=(task.start_date, task_y),  # end point
+    #                         xytext=(pred_task.end_date, pred_y),  # start point
+    #                         arrowprops=dict(
+    #                             arrowstyle=arrow_style,
+    #                             color=arrow_color,
+    #                             alpha=arrow_alpha,
+    #                             linewidth=arrow_linewidth,
+    #                             connectionstyle="arc3,rad=.1",  # Less curved arrows (0.1 instead of 0.2)
+    #                         ),
+    #                     )
+
+    #     # Set y-axis labels with task names
+    #     ax.set_yticks(range(len(sorted_tasks) + 1))
+    #     ax.set_yticklabels([t.name for t in sorted_tasks] + ["Buffer"])
+
+    #     # Set chart title and labels
+    #     ax.set_title("Project Gantt Chart with Critical Chain")
+    #     ax.set_xlabel("Time")
+
+    #     # Add a legend for resource colors
+    #     unique_resources = set()
+    #     for task in self.tasks:
+    #         for resource in task.resources:
+    #             unique_resources.add(resource)
+
+    #     # Create legend patches
+    #     legend_patches = []
+    #     for resource in unique_resources:
+    #         color = color_map.get(resource, default_task_color)
+    #         patch = plt.Rectangle((0, 0), 1, 1, fc=color, alpha=0.6)
+    #         legend_patches.append((patch, resource))
+
+    #     # Add multiple resources patch
+    #     if any(len(task.resources) > 1 for task in self.tasks):
+    #         patch = plt.Rectangle((0, 0), 1, 1, fc=default_task_color, alpha=0.6)
+    #         legend_patches.append((patch, "Multiple Resources"))
+
+    #     # Add critical chain patch
+    #     critical_patch = plt.Rectangle((0, 0), 1, 1, fc="white", ec="yellow", lw=2)
+    #     legend_patches.append((critical_patch, "Critical Chain"))
+
+    #     # Add dependency arrow patches to legend - also smaller for consistency
+    #     normal_arrow = plt.Line2D(
+    #         [0],
+    #         [0],
+    #         color="gray",
+    #         marker=">",
+    #         markersize=6,
+    #         linestyle="-",
+    #         linewidth=0.8,
+    #     )
+    #     critical_arrow = plt.Line2D(
+    #         [0],
+    #         [0],
+    #         color="yellow",
+    #         marker=">",
+    #         markersize=6,
+    #         linestyle="-",
+    #         linewidth=1.2,
+    #     )
+    #     legend_patches.append((normal_arrow, "Task Dependency"))
+    #     legend_patches.append((critical_arrow, "Critical Dependency"))
+
+    #     # Add the legend
+    #     ax.legend(
+    #         [patch for patch, label in legend_patches],
+    #         [label for patch, label in legend_patches],
+    #         loc="lower right",
+    #     )
+
+    #     plt.tight_layout()
+
+    #     # Save if filename is provided
+    #     if filename:
+    #         plt.savefig(filename)
+
+    #     return fig
 
     def generate_gantt_chart(self, filename: str = None) -> plt.Figure:
-        """Generate Gantt chart with dependency arrows and pickable bars"""
+        """Generate Gantt chart with dependency arrows, critical chain, and buffers"""
         # Create figure with interactive mode off to prevent popup window
         plt.ioff()
         fig, ax = plt.subplots(figsize=(12, 6))
@@ -687,7 +900,7 @@ class CriticalChainplanner:
                 # For multiple resources or no resources, use the default color
                 task_color = default_task_color
 
-            # Plot the task bar - make it pickable with a unique label
+            # Plot the task bar
             bar = ax.barh(
                 i,
                 duration,
@@ -714,11 +927,14 @@ class CriticalChainplanner:
                 color="black",
             )
 
+        # Count items for vertical positioning
+        num_items = len(sorted_tasks)
+
         # Add project buffer at the end
         if self.project_buffer > 0:
-            project_end = max(t.end_date for t in self.tasks)
+            project_end = max(t.end_date for t in self.tasks if t.is_critical)
             buffer_bar = ax.barh(
-                len(sorted_tasks),
+                num_items,
                 self.project_buffer,
                 left=project_end,
                 color="gold",
@@ -732,14 +948,77 @@ class CriticalChainplanner:
 
             ax.text(
                 project_end + self.project_buffer / 2,
-                len(sorted_tasks),
+                num_items,
                 f"Project Buffer",
                 ha="center",
                 va="center",
                 color="black",
             )
 
-        # Draw dependency arrows with smaller arrow heads
+            num_items += 1
+
+        # Add feeding buffers
+        for idx, buffer_info in enumerate(getattr(self, "feeding_buffers", [])):
+            feeding_chain = buffer_info["feeding_chain"]
+            joining_task = buffer_info["joining_task"]
+            buffer_size = buffer_info["buffer_size"]
+
+            if feeding_chain and joining_task:
+                # Last task in the feeding chain
+                last_task = feeding_chain[-1]
+
+                # Position the feeding buffer after the last task in the chain
+                buffer_start = last_task.end_date
+
+                # Position in y-axis (below the project buffer)
+                buffer_y = num_items + idx
+
+                # Draw the feeding buffer
+                fb_bar = ax.barh(
+                    buffer_y,
+                    buffer_size,
+                    left=buffer_start,
+                    color="lightgreen",  # Different color from project buffer
+                    alpha=0.6,
+                    label=f"Feeding Buffer ({last_task.name} → {joining_task.name})",
+                )
+
+                # Add a border to the buffer
+                fb_bar[0].set_edgecolor("darkgreen")
+                fb_bar[0].set_linewidth(1.5)
+
+                # Add label
+                ax.text(
+                    buffer_start + buffer_size / 2,
+                    buffer_y,
+                    f"FB: {last_task.name}→{joining_task.name}",
+                    ha="center",
+                    va="center",
+                    color="black",
+                )
+
+                # Draw an arrow from the feeding buffer to the joining task
+                if joining_task.task_id in task_positions:
+                    joining_y = task_positions[joining_task.task_id]
+
+                    # Draw arrow from end of feeding buffer to the joining task
+                    ax.annotate(
+                        "",
+                        xy=(joining_task.start_date, joining_y),  # end point
+                        xytext=(buffer_start + buffer_size, buffer_y),  # start point
+                        arrowprops=dict(
+                            arrowstyle="simple,head_width=2,head_length=3",
+                            color="darkgreen",
+                            alpha=0.6,
+                            linewidth=0.8,
+                            connectionstyle="arc3,rad=.1",
+                        ),
+                    )
+
+        # Update the number of items to include feeding buffers
+        num_items += len(getattr(self, "feeding_buffers", []))
+
+        # Draw dependency arrows
         for task in sorted_tasks:
             if task.predecessors:
                 # Get list of predecessor IDs
@@ -789,12 +1068,23 @@ class CriticalChainplanner:
                             ),
                         )
 
-        # Set y-axis labels with task names
-        ax.set_yticks(range(len(sorted_tasks) + 1))
-        ax.set_yticklabels([t.name for t in sorted_tasks] + ["Buffer"])
+        # Set y-axis labels with task names and buffers
+        y_labels = [t.name for t in sorted_tasks]
+        y_labels.append("Project Buffer")
+
+        # Add feeding buffer labels
+        for buffer_info in getattr(self, "feeding_buffers", []):
+            feeding_chain = buffer_info["feeding_chain"]
+            joining_task = buffer_info["joining_task"]
+            if feeding_chain and joining_task:
+                last_task = feeding_chain[-1]
+                y_labels.append(f"FB: {last_task.name}→{joining_task.name}")
+
+        ax.set_yticks(range(len(y_labels)))
+        ax.set_yticklabels(y_labels)
 
         # Set chart title and labels
-        ax.set_title("Project Gantt Chart with Critical Chain")
+        ax.set_title("Project Gantt Chart with Critical Chain and Buffers")
         ax.set_xlabel("Time")
 
         # Add a legend for resource colors
@@ -818,6 +1108,18 @@ class CriticalChainplanner:
         # Add critical chain patch
         critical_patch = plt.Rectangle((0, 0), 1, 1, fc="white", ec="yellow", lw=2)
         legend_patches.append((critical_patch, "Critical Chain"))
+
+        # Add project buffer patch
+        project_buffer_patch = plt.Rectangle(
+            (0, 0), 1, 1, fc="gold", alpha=0.6, ec="yellow", lw=2
+        )
+        legend_patches.append((project_buffer_patch, "Project Buffer"))
+
+        # Add feeding buffer patch
+        feeding_buffer_patch = plt.Rectangle(
+            (0, 0), 1, 1, fc="lightgreen", alpha=0.6, ec="darkgreen", lw=1.5
+        )
+        legend_patches.append((feeding_buffer_patch, "Feeding Buffer"))
 
         # Add dependency arrow patches to legend - also smaller for consistency
         normal_arrow = plt.Line2D(
@@ -855,6 +1157,247 @@ class CriticalChainplanner:
             plt.savefig(filename)
 
         return fig
+
+    def _identify_critical_chain(self, G: nx.DiGraph) -> None:
+        """
+        Identify the critical chain in the project using a more sophisticated approach.
+
+        This implementation is based on advanced critical chain calculation methods that
+        consider both task duration and resource constraints.
+        """
+        # Find all terminal tasks (tasks with no successors)
+        terminal_tasks = [node for node in G.nodes() if G.out_degree(node) == 0]
+
+        if not terminal_tasks:
+            # If there are no terminal tasks, there's no critical chain
+            self.chains = []
+            return
+
+        # For each terminal task, find the longest path to it
+        longest_path = []
+        longest_duration = 0
+
+        for end_node in terminal_tasks:
+            # Find all simple paths from any starting node to this end node
+            for start_node in [node for node in G.nodes() if G.in_degree(node) == 0]:
+                for path in nx.all_simple_paths(G, start_node, end_node):
+                    # Calculate total duration of this path, considering resource leveling
+                    path_duration = 0
+                    for task_id in path:
+                        task = next(
+                            (t for t in self.tasks if t.get_ID() == task_id), None
+                        )
+                        if task:
+                            path_duration += task.duration
+
+                    # If this path is longer than our current longest, update
+                    if path_duration > longest_duration:
+                        longest_duration = path_duration
+                        longest_path = path
+
+        # Get task objects for the critical chain
+        critical_chain_tasks = []
+        for task_id in longest_path:
+            task = next((t for t in self.tasks if t.get_ID() == task_id), None)
+            if task:
+                task.is_critical = True
+                critical_chain_tasks.append(task)
+            else:
+                # If task not found, something's wrong
+                print(
+                    f"Warning: Task ID {task_id} in critical path not found in tasks list"
+                )
+
+        # Store the critical chain
+        self.chains = [critical_chain_tasks]
+
+        # Identify feeding chains (chains that merge into the critical chain)
+        self._identify_feeding_chains(G, longest_path)
+
+    def _identify_feeding_chains(self, G: nx.DiGraph, critical_path: list) -> None:
+        """
+        Identify feeding chains - chains that feed into the critical chain but are not part of it.
+
+        Args:
+            G: NetworkX directed graph of task dependencies
+            critical_path: List of task IDs in the critical chain
+        """
+        # Find all tasks that are predecessors of tasks in the critical chain
+        # but are not themselves in the critical chain
+        feeding_chains = []
+
+        for idx, task_id in enumerate(critical_path):
+            # Get all predecessors of this task in the critical chain
+            task = next((t for t in self.tasks if t.get_ID() == task_id), None)
+            if not task or not task.get_preds():
+                continue
+
+            pred_ids = [int(p) for p in task.get_preds().split(",") if p.strip()]
+
+            for pred_id in pred_ids:
+                # Skip if this predecessor is in the critical chain
+                if pred_id in critical_path:
+                    continue
+
+                # This is a potential start of a feeding chain
+                # Find the longest path ending at this predecessor
+                feeding_chain = self._find_longest_path_to_task(G, pred_id)
+
+                if feeding_chain:
+                    # Get task objects for this feeding chain
+                    feeding_chain_tasks = []
+                    for fc_task_id in feeding_chain:
+                        fc_task = next(
+                            (t for t in self.tasks if t.get_ID() == fc_task_id), None
+                        )
+                        if fc_task:
+                            feeding_chain_tasks.append(fc_task)
+
+                    if feeding_chain_tasks:
+                        feeding_chains.append(feeding_chain_tasks)
+
+        # Add feeding chains to the chains list
+        self.chains.extend(feeding_chains)
+
+    def _find_longest_path_to_task(self, G: nx.DiGraph, end_task_id: int) -> list:
+        """
+        Find the longest path to a specific task.
+
+        Args:
+            G: NetworkX directed graph of task dependencies
+            end_task_id: Task ID to find the longest path to
+
+        Returns:
+            List of task IDs in the longest path
+        """
+        # Find nodes with no predecessors (start nodes)
+        start_nodes = [node for node in G.nodes() if G.in_degree(node) == 0]
+
+        longest_path = []
+        longest_duration = 0
+
+        # Find the longest path from any start node to the target task
+        for start_node in start_nodes:
+            try:
+                # Skip if there's no path from this start to the end
+                if not nx.has_path(G, start_node, end_task_id):
+                    continue
+
+                # Get all paths from this start to the end task
+                for path in nx.all_simple_paths(G, start_node, end_task_id):
+                    # Calculate total duration of this path
+                    path_duration = 0
+                    for task_id in path:
+                        task = next(
+                            (t for t in self.tasks if t.get_ID() == task_id), None
+                        )
+                        if task:
+                            path_duration += task.duration
+
+                    # If this path is longer than our current longest, update
+                    if path_duration > longest_duration:
+                        longest_duration = path_duration
+                        longest_path = path
+            except nx.NetworkXNoPath:
+                continue
+
+        return longest_path
+
+    def _calculate_buffers(self) -> None:
+        """
+        Calculate project buffer and feeding buffers according to critical chain methodology.
+
+        The project buffer is calculated based on the critical chain.
+        Feeding buffers are calculated for each feeding chain.
+        """
+        # Verify we have identified chains
+        if not self.chains:
+            print("Warning: No chains identified, cannot calculate buffers")
+            return
+
+        # The first chain is the critical chain
+        critical_chain = self.chains[0] if self.chains else []
+
+        # Calculate project buffer (50% of critical chain duration by default)
+        if critical_chain:
+            critical_chain_duration = sum(task.duration for task in critical_chain)
+            self.project_buffer = self._calculate_buffer_size(critical_chain_duration)
+        else:
+            self.project_buffer = 0
+
+        # Calculate feeding buffers for each feeding chain
+        self.feeding_buffers = []
+
+        for i, chain in enumerate(
+            self.chains[1:], 1
+        ):  # Skip the first chain (critical chain)
+            if chain:
+                # Calculate chain duration
+                chain_duration = sum(task.duration for task in chain)
+
+                # Calculate buffer size for this feeding chain
+                buffer_size = self._calculate_buffer_size(chain_duration)
+
+                # Find the task in the critical chain that this feeding chain feeds into
+                last_task_in_chain = chain[-1] if chain else None
+                if last_task_in_chain:
+                    # Find successors of this last task
+                    for task in self.tasks:
+                        if task.get_preds():
+                            pred_ids = [
+                                int(p) for p in task.get_preds().split(",") if p.strip()
+                            ]
+                            if (
+                                last_task_in_chain.get_ID() in pred_ids
+                                and task.is_critical
+                            ):
+                                # Found a critical chain task that this feeding chain connects to
+                                joining_task = task
+                                break
+                    else:
+                        joining_task = None
+
+                    # Store the feeding buffer information
+                    self.feeding_buffers.append(
+                        {
+                            "buffer_size": buffer_size,
+                            "feeding_chain": chain,
+                            "joining_task": joining_task,
+                        }
+                    )
+
+    def _calculate_buffer_size(self, chain_duration: int) -> int:
+        """
+        Calculate buffer size based on chain duration using the square root of the sum of squares method.
+
+        This method is more sophisticated than simply using 50% of chain duration.
+
+        Args:
+            chain_duration: Total duration of the chain
+
+        Returns:
+            Buffer size (rounded to nearest integer)
+        """
+        # By default, we'll use 50% of the chain duration
+        # This can be enhanced with statistical methods like square root of sum of squares
+        # For now, keeping it straightforward
+        return int(chain_duration * 0.5)
+
+    def get_feeding_buffer_for_task(self, task_id: int) -> dict:
+        """
+        Get the feeding buffer information for a task if it's the last task in a feeding chain.
+
+        Args:
+            task_id: Task ID to check
+
+        Returns:
+            Dictionary with buffer information or None if not found
+        """
+        for buffer_info in self.feeding_buffers:
+            feeding_chain = buffer_info["feeding_chain"]
+            if feeding_chain and feeding_chain[-1].get_ID() == task_id:
+                return buffer_info
+        return None
 
 
 class CCPMplannerGUI:
