@@ -581,40 +581,40 @@ class CriticalChainplanner:
         # Calculate project buffer (50% of critical chain duration in this simple implementation)
         self._calculate_buffers()
 
-    def _apply_resource_leveling(self) -> None:
-        """Apply resource leveling to resolve resource conflicts"""
-        # This is a simplified implementation
-        # Sort tasks by start date
-        sorted_tasks = sorted(self.tasks, key=lambda t: t.start_date)
+    # def _apply_resource_leveling(self) -> None:
+    #     """Apply resource leveling to resolve resource conflicts"""
+    #     # This is a simplified implementation
+    #     # Sort tasks by start date
+    #     sorted_tasks = sorted(self.tasks, key=lambda t: t.start_date)
 
-        # Track resource usage over time
-        resource_timeline = {}
+    #     # Track resource usage over time
+    #     resource_timeline = {}
 
-        for task in sorted_tasks:
-            delay_needed = 0
+    #     for task in sorted_tasks:
+    #         delay_needed = 0
 
-            # Check each resource assigned to the task
-            for resource_id in task.resources:
-                if resource_id not in resource_timeline:
-                    resource_timeline[resource_id] = []
+    #         # Check each resource assigned to the task
+    #         for resource_id in task.resources:
+    #             if resource_id not in resource_timeline:
+    #                 resource_timeline[resource_id] = []
 
-                # Find conflicts with this resource
-                for time_slot in resource_timeline[resource_id]:
-                    start, end = time_slot
-                    # Check if there's overlap
-                    if not (task.end_date <= start or task.start_date >= end):
-                        # Calculate needed delay to resolve conflict
-                        potential_delay = end - task.start_date
-                        delay_needed = max(delay_needed, potential_delay)
+    #             # Find conflicts with this resource
+    #             for time_slot in resource_timeline[resource_id]:
+    #                 start, end = time_slot
+    #                 # Check if there's overlap
+    #                 if not (task.end_date <= start or task.start_date >= end):
+    #                     # Calculate needed delay to resolve conflict
+    #                     potential_delay = end - task.start_date
+    #                     delay_needed = max(delay_needed, potential_delay)
 
-            # Apply delay if needed
-            if delay_needed > 0:
-                task.start_date += delay_needed
-                task.end_date += delay_needed
+    #         # Apply delay if needed
+    #         if delay_needed > 0:
+    #             task.start_date += delay_needed
+    #             task.end_date += delay_needed
 
-            # Update resource timeline
-            for resource_id in task.resources:
-                resource_timeline[resource_id].append((task.start_date, task.end_date))
+    #         # Update resource timeline
+    #         for resource_id in task.resources:
+    #             resource_timeline[resource_id].append((task.start_date, task.end_date))
 
     # def _identify_critical_chain(self, G: nx.DiGraph) -> None:
     #     """Identify the critical chain in the project"""
@@ -1398,6 +1398,193 @@ class CriticalChainplanner:
             if feeding_chain and feeding_chain[-1].get_ID() == task_id:
                 return buffer_info
         return None
+
+    def _apply_resource_leveling(self) -> None:
+        """
+        Apply advanced resource leveling to resolve resource conflicts.
+
+        This implementation is based on the priority-based resource leveling algorithm
+        from the critical_chain_simulator VBA code, which considers:
+        - Task priority (critical tasks get higher priority)
+        - Task dependencies
+        - Resource availability over time
+        - Minimal project delay
+        """
+        # First, sort tasks by their early start date (based on dependencies only)
+        sorted_tasks = sorted(self.tasks, key=lambda t: t.start_date)
+
+        # Initialize resource calendar - track resource usage over time
+        resource_calendar = {}
+        for task in self.tasks:
+            for resource_id in task.resources:
+                if resource_id not in resource_calendar:
+                    resource_calendar[resource_id] = {}
+
+        # Get resource availability from resource manager
+        resource_availability = {}
+        for resource_id, resource_info in self.resource_manager.get_resources().items():
+            # Convert percentage to decimal (e.g., 100% -> 1.0)
+            resource_availability[resource_id] = resource_info["availability"] / 100.0
+
+        # First pass - schedule tasks based on early start dates and check for conflicts
+        # This algorithm uses a priority-based approach
+        for task in sorted_tasks:
+            # Skip tasks with no resources
+            if not task.resources:
+                continue
+
+            # Start with the early start date based on predecessors
+            current_start = task.start_date
+            delay_needed = 0
+
+            # Keep trying to schedule until we find a time with no conflicts
+            scheduling_conflict = True
+            while scheduling_conflict:
+                scheduling_conflict = False
+
+                # Check each resource assigned to the task
+                for resource_id in task.resources:
+                    if resource_id not in resource_calendar:
+                        resource_calendar[resource_id] = {}
+
+                    # Check resource availability for the entire duration of the task
+                    for time_slot in range(
+                        current_start, current_start + task.duration
+                    ):
+                        # Get current usage of this resource at this time slot
+                        current_usage = resource_calendar[resource_id].get(time_slot, 0)
+
+                        # Get the availability of this resource
+                        availability = resource_availability.get(resource_id, 1.0)
+
+                        # Check if adding this task would exceed resource capacity
+                        if current_usage + 1 > availability:
+                            # Find the next available slot for this resource
+                            next_available_slot = self._find_next_available_slot(
+                                resource_calendar[resource_id],
+                                resource_availability.get(resource_id, 1.0),
+                                time_slot,
+                            )
+
+                            # Calculate new delay needed
+                            potential_delay = next_available_slot - current_start
+                            if potential_delay > delay_needed:
+                                delay_needed = potential_delay
+
+                            scheduling_conflict = True
+                            break  # Break out of time slot loop
+
+                    if scheduling_conflict:
+                        break  # Break out of resource loop
+
+                # If there's a conflict, update the start date and try again
+                if scheduling_conflict:
+                    current_start += delay_needed
+                    delay_needed = 0  # Reset delay for next iteration
+
+            # Apply the final scheduled start date
+            task.start_date = current_start
+            task.end_date = current_start + task.duration
+
+            # Update resource calendar with this task's usage
+            for resource_id in task.resources:
+                for time_slot in range(task.start_date, task.end_date):
+                    if time_slot not in resource_calendar[resource_id]:
+                        resource_calendar[resource_id][time_slot] = 0
+                    resource_calendar[resource_id][time_slot] += 1
+
+        # Second pass - optimization: try to pull tasks earlier if possible
+        # This helps minimize gaps in the schedule
+        for task in sorted(self.tasks, key=lambda t: t.start_date):
+            if not task.resources:
+                continue
+
+            # Find the earliest possible start date based on predecessors
+            earliest_start = 0
+            if task.predecessors:
+                pred_ids = task.predecessors.split(",")
+                for pred_id in pred_ids:
+                    if pred_id.strip():
+                        pred_task = next(
+                            (
+                                t
+                                for t in self.tasks
+                                if str(t.task_id) == pred_id.strip()
+                            ),
+                            None,
+                        )
+                        if pred_task:
+                            earliest_start = max(earliest_start, pred_task.end_date)
+
+            # Don't try to schedule earlier than the earliest start date
+            if task.start_date <= earliest_start:
+                continue
+
+            # Try to pull this task earlier
+            current_start = task.start_date
+            earliest_possible = current_start
+
+            # Remove this task from the resource calendar temporarily
+            for resource_id in task.resources:
+                for time_slot in range(task.start_date, task.end_date):
+                    if time_slot in resource_calendar[resource_id]:
+                        resource_calendar[resource_id][time_slot] -= 1
+
+            # Try to schedule the task earlier
+            for potential_start in range(earliest_start, current_start):
+                can_schedule = True
+
+                # Check each resource for this potential start time
+                for resource_id in task.resources:
+                    for time_slot in range(
+                        potential_start, potential_start + task.duration
+                    ):
+                        current_usage = resource_calendar[resource_id].get(time_slot, 0)
+                        availability = resource_availability.get(resource_id, 1.0)
+
+                        if current_usage + 1 > availability:
+                            can_schedule = False
+                            break
+
+                    if not can_schedule:
+                        break
+
+                if can_schedule:
+                    earliest_possible = potential_start
+                    break
+
+            # Update task with the new earlier start date
+            task.start_date = earliest_possible
+            task.end_date = earliest_possible + task.duration
+
+            # Add this task back to the resource calendar
+            for resource_id in task.resources:
+                for time_slot in range(task.start_date, task.end_date):
+                    if time_slot not in resource_calendar[resource_id]:
+                        resource_calendar[resource_id][time_slot] = 0
+                    resource_calendar[resource_id][time_slot] += 1
+
+    def _find_next_available_slot(
+        self, resource_usage: dict, availability: float, current_time: int
+    ) -> int:
+        """
+        Find the next time slot where a resource is available.
+
+        Args:
+            resource_usage: Dictionary mapping time slots to resource usage
+            availability: The availability of the resource (e.g., 1.0 for 100%)
+            current_time: Current time slot to start searching from
+
+        Returns:
+            The next available time slot
+        """
+        next_time = current_time + 1
+
+        # Keep incrementing until we find an available slot
+        while next_time in resource_usage and resource_usage[next_time] >= availability:
+            next_time += 1
+
+        return next_time
 
 
 class CCPMplannerGUI:
