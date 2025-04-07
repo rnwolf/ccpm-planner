@@ -69,43 +69,116 @@ class SampleDataset:
         self.tasks = tasks  # List of task parameter tuples
         self.expected_chain = expected_chain  # Expected critical chain task names
 
+    # def load_into_planner(self, planner):
+    #     """Load this dataset into the provided planner"""
+    #     # Add resources
+    #     for resource_id, availability in self.resources.items():
+    #         planner.resource_manager.add_resource(
+    #             resource_id, resource_id, availability * 100
+    #         )
+
+    #     # Add tasks
+    #     task_id = 1
+    #     for task_data in self.tasks:
+    #         if len(task_data) >= 5 and isinstance(
+    #             task_data[0], str
+    #         ):  # Larry Leech format with string names
+    #             name, safe_duration, aggressive_duration, dependencies, resource = (
+    #                 task_data
+    #             )
+    #             # Convert dependencies from task names to task IDs
+    #             pred_ids = []
+    #             for dep_name in dependencies:
+    #                 for existing_task in planner.tasks:
+    #                     if existing_task.name == dep_name:
+    #                         pred_ids.append(str(existing_task.task_id))
+    #                         break
+
+    #             # Create the task
+    #             task = planner.add_task(
+    #                 task_id,
+    #                 name,
+    #                 int(safe_duration),  # Ensure safe duration is an integer
+    #                 [resource] if resource else [],
+    #                 ",".join(pred_ids),
+    #             )
+
+    #             # Set specific durations
+    #             task.safe_duration = int(safe_duration)
+    #             task.aggressive_duration = int(aggressive_duration)
+    #         else:  # Standard format
+    #             # Unpack task data
+    #             if len(task_data) == 5:
+    #                 task_id_val, name, duration, resources, predecessors = task_data
+    #             else:
+    #                 # Default values for missing parameters
+    #                 task_id_val, name, duration = (
+    #                     task_data[0],
+    #                     task_data[1],
+    #                     task_data[2],
+    #                 )
+    #                 resources = task_data[3] if len(task_data) > 3 else []
+    #                 predecessors = task_data[4] if len(task_data) > 4 else ""
+
+    #             # Create the task
+    #             planner.add_task(
+    #                 int(task_id_val),
+    #                 name,
+    #                 int(duration),
+    #                 resources,
+    #                 predecessors,
+    #             )
+
+    #             # Update task_id for next loop iteration
+    #             task_id = int(task_id_val) + 1
+    #             continue
+
+    #         task_id += 1
+
+    #     # Schedule tasks
+    #     planner.schedule_tasks()
+
+    # return planner
+
     def load_into_planner(self, planner):
-        """Load this dataset into the provided planner"""
+        """Load this dataset into the provided planner using post-processing for dependencies"""
         # Add resources
         for resource_id, availability in self.resources.items():
             planner.resource_manager.add_resource(
                 resource_id, resource_id, availability * 100
             )
 
+        # First, create a dictionary to map task names to their IDs
+        task_name_to_id = {}
+
         # Add tasks
         task_id = 1
         for task_data in self.tasks:
             if len(task_data) >= 5 and isinstance(
                 task_data[0], str
-            ):  # Larry Leech format with string names
+            ):  # Larry Leech format
                 name, safe_duration, aggressive_duration, dependencies, resource = (
                     task_data
                 )
-                # Convert dependencies from task names to task IDs
-                pred_ids = []
-                for dep_name in dependencies:
-                    for existing_task in planner.tasks:
-                        if existing_task.name == dep_name:
-                            pred_ids.append(str(existing_task.task_id))
-                            break
 
-                # Create the task
+                # Create the task with empty predecessors initially
                 task = planner.add_task(
                     task_id,
                     name,
-                    int(safe_duration),  # Ensure safe duration is an integer
+                    int(safe_duration),
                     [resource] if resource else [],
-                    ",".join(pred_ids),
+                    "",  # Start with empty predecessors
                 )
+
+                # Store the mapping from task name to task ID
+                task_name_to_id[name] = task_id
 
                 # Set specific durations
                 task.safe_duration = int(safe_duration)
                 task.aggressive_duration = int(aggressive_duration)
+
+                task_id += 1
+
             else:  # Standard format
                 # Unpack task data
                 if len(task_data) == 5:
@@ -133,12 +206,129 @@ class SampleDataset:
                 task_id = int(task_id_val) + 1
                 continue
 
-            task_id += 1
+        # Now process all dependencies in a second pass
+        for task_data in self.tasks:
+            if len(task_data) >= 5 and isinstance(
+                task_data[0], str
+            ):  # Larry Leech format
+                name, safe_duration, aggressive_duration, dependencies, resource = (
+                    task_data
+                )
+
+                if dependencies:
+                    # Find the task object
+                    task = next((t for t in planner.tasks if t.name == name), None)
+                    if task:
+                        # Convert dependencies from task names to task IDs
+                        pred_ids = []
+                        for dep_name in dependencies:
+                            if dep_name in task_name_to_id:
+                                pred_ids.append(str(task_name_to_id[dep_name]))
+
+                        # Set the predecessors string
+                        if pred_ids:
+                            task.predecessors = ",".join(pred_ids)
 
         # Schedule tasks
         planner.schedule_tasks()
 
         return planner
+
+    # def load_into_planner(self, planner):
+    #     """Load this dataset into the provided planner with detailed debugging"""
+    #     import sys
+
+    #     # Add resources
+    #     for resource_id, availability in self.resources.items():
+    #         planner.resource_manager.add_resource(
+    #             resource_id, resource_id, availability * 100
+    #         )
+
+    #     print("\n==== DEBUG: LOADING DATASET ====")
+    #     print(f"Dataset: {self.name}")
+
+    #     # Add tasks
+    #     task_id = 1
+    #     for task_data in self.tasks:
+    #         if len(task_data) >= 5 and isinstance(
+    #             task_data[0], str
+    #         ):  # Larry Leech format with string names
+    #             name, safe_duration, aggressive_duration, dependencies, resource = (
+    #                 task_data
+    #             )
+
+    #             print(f"\nProcessing task: {name} with dependencies: {dependencies}")
+
+    #             # Convert dependencies from task names to task IDs
+    #             pred_ids = []
+    #             for dep_name in dependencies:
+    #                 print(f"  Looking for dependency: {dep_name}")
+    #                 found = False
+    #                 for existing_task in planner.tasks:
+    #                     if existing_task.name == dep_name:
+    #                         pred_ids.append(str(existing_task.task_id))
+    #                         print(f"    Found! ID: {existing_task.task_id}")
+    #                         found = True
+    #                         break
+    #                 if not found:
+    #                     print(f"    NOT FOUND! Dependency {dep_name} will be missing.")
+
+    #             print(f"  Final predecessor IDs: {pred_ids}")
+
+    #             # Create the task
+    #             task = planner.add_task(
+    #                 task_id,
+    #                 name,
+    #                 int(safe_duration),  # Ensure safe duration is an integer
+    #                 [resource] if resource else [],
+    #                 ",".join(pred_ids),
+    #             )
+
+    #             # Set specific durations
+    #             task.safe_duration = int(safe_duration)
+    #             task.aggressive_duration = int(aggressive_duration)
+    #         else:  # Standard format
+    #             # Unpack task data
+    #             if len(task_data) == 5:
+    #                 task_id_val, name, duration, resources, predecessors = task_data
+    #             else:
+    #                 # Default values for missing parameters
+    #                 task_id_val, name, duration = (
+    #                     task_data[0],
+    #                     task_data[1],
+    #                     task_data[2],
+    #                 )
+    #                 resources = task_data[3] if len(task_data) > 3 else []
+    #                 predecessors = task_data[4] if len(task_data) > 4 else ""
+
+    #             # Create the task
+    #             planner.add_task(
+    #                 int(task_id_val),
+    #                 name,
+    #                 int(duration),
+    #                 resources,
+    #                 predecessors,
+    #             )
+
+    #             # Update task_id for next loop iteration
+    #             task_id = int(task_id_val) + 1
+    #             continue
+
+    #         task_id += 1
+
+    #     # Print final task list
+    #     print("\n==== FINAL TASK LIST ====")
+    #     for task in planner.tasks:
+    #         print(
+    #             f"Task ID: {task.task_id}, Name: {task.name}, Predecessors: {task.predecessors}"
+    #         )
+
+    #     print("\n==== END DEBUG ====\n")
+
+    #     # Schedule tasks
+    #     planner.schedule_tasks()
+
+    #     return planner
 
 
 class ResourceManager:
@@ -204,7 +394,7 @@ class CriticalChainplanner:
         small_tasks = [
             ("T1.1", 30, 15, [], "Red"),
             ("T1.2", 20, 10, ["T1.1"], "Green"),
-            ("T3", 30, 15, ["T1.2", "T2.2"], "Magenta"),
+            ("T3", 30, 15, ["T2.2", "T1.2"], "Magenta"),
             ("T2.1", 20, 10, [], "Blue"),
             ("T2.2", 10, 5, ["T2.1"], "Green"),
         ]
@@ -455,13 +645,16 @@ class CriticalChainplanner:
         self.project_buffer = total_critical_duration * 0.5
 
     def generate_gantt_chart(self, filename: str = None) -> plt.Figure:
-        """Generate Gantt chart"""
+        """Generate Gantt chart with dependency arrows and pickable bars"""
         # Create figure with interactive mode off to prevent popup window
         plt.ioff()
         fig, ax = plt.subplots(figsize=(12, 6))
 
         # Sort tasks by start date
         sorted_tasks = sorted(self.tasks, key=lambda t: t.start_date)
+
+        # Create a mapping of task_id to y-position for arrow drawing
+        task_positions = {task.task_id: i for i, task in enumerate(sorted_tasks)}
 
         # Define color mapping - converting resource color names to actual matplotlib colors
         color_map = {
@@ -494,8 +687,16 @@ class CriticalChainplanner:
                 # For multiple resources or no resources, use the default color
                 task_color = default_task_color
 
-            # Plot the task bar
-            bar = ax.barh(i, duration, left=start, color=task_color, alpha=0.6)
+            # Plot the task bar - make it pickable with a unique label
+            bar = ax.barh(
+                i,
+                duration,
+                left=start,
+                color=task_color,
+                alpha=0.6,
+                picker=5,  # 5 points tolerance for picking
+                label=f"Task: {task.name} ID:{task.task_id}",  # Label with task info for picking
+            )
 
             # If this is a critical task, add yellow border
             if task.is_critical:
@@ -522,6 +723,7 @@ class CriticalChainplanner:
                 left=project_end,
                 color="gold",
                 alpha=0.6,
+                label="Project Buffer",
             )
 
             # Add a yellow border to the buffer
@@ -536,6 +738,56 @@ class CriticalChainplanner:
                 va="center",
                 color="black",
             )
+
+        # Draw dependency arrows with smaller arrow heads
+        for task in sorted_tasks:
+            if task.predecessors:
+                # Get list of predecessor IDs
+                pred_ids = [int(p) for p in task.predecessors.split(",") if p.strip()]
+
+                # Current task y-position
+                task_y = task_positions[task.task_id]
+
+                for pred_id in pred_ids:
+                    # Find the predecessor task
+                    pred_task = next(
+                        (t for t in self.tasks if t.task_id == pred_id), None
+                    )
+                    if pred_task and pred_id in task_positions:
+                        # Predecessor task y-position
+                        pred_y = task_positions[pred_id]
+
+                        # Arrow style - critical chain arrows are yellow, others are gray
+                        arrow_color = (
+                            "yellow"
+                            if task.is_critical and pred_task.is_critical
+                            else "gray"
+                        )
+
+                        # Smaller arrow heads for better proportion
+                        arrow_style = "simple,head_width=2,head_length=3"
+
+                        arrow_alpha = (
+                            0.8 if task.is_critical and pred_task.is_critical else 0.6
+                        )
+                        arrow_linewidth = (
+                            1.2 if task.is_critical and pred_task.is_critical else 0.8
+                        )
+
+                        # Draw arrow from end of predecessor to start of current task
+                        # Use a gentler curve and smaller arrow heads
+                        ax.annotate(
+                            "",
+                            xy=(task.start_date, task_y),  # end point
+                            xytext=(pred_task.end_date, pred_y),  # start point
+                            arrowprops=dict(
+                                arrowstyle=arrow_style,
+                                color=arrow_color,
+                                alpha=arrow_alpha,
+                                linewidth=arrow_linewidth,
+                                connectionstyle="arc3,rad=.1",  # Less curved arrows (0.1 instead of 0.2)
+                            ),
+                        )
 
         # Set y-axis labels with task names
         ax.set_yticks(range(len(sorted_tasks) + 1))
@@ -566,6 +818,28 @@ class CriticalChainplanner:
         # Add critical chain patch
         critical_patch = plt.Rectangle((0, 0), 1, 1, fc="white", ec="yellow", lw=2)
         legend_patches.append((critical_patch, "Critical Chain"))
+
+        # Add dependency arrow patches to legend - also smaller for consistency
+        normal_arrow = plt.Line2D(
+            [0],
+            [0],
+            color="gray",
+            marker=">",
+            markersize=6,
+            linestyle="-",
+            linewidth=0.8,
+        )
+        critical_arrow = plt.Line2D(
+            [0],
+            [0],
+            color="yellow",
+            marker=">",
+            markersize=6,
+            linestyle="-",
+            linewidth=1.2,
+        )
+        legend_patches.append((normal_arrow, "Task Dependency"))
+        legend_patches.append((critical_arrow, "Critical Dependency"))
 
         # Add the legend
         ax.legend(
@@ -800,26 +1074,6 @@ class CCPMplannerGUI:
         # Populate resource list
         self._update_resource_list()
 
-    def _setup_gantt_tab(self):
-        """Set up the Gantt chart tab"""
-        # Create a frame for the Gantt chart
-        self.gantt_frame = ttk.Frame(self.gantt_tab)
-        self.gantt_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        # Create the Gantt chart with interactive mode off
-        plt.ioff()  # Turn off interactive mode
-        fig = self.planner.generate_gantt_chart()
-
-        # Create canvas for the chart
-        self.gantt_canvas = FigureCanvasTkAgg(fig, self.gantt_frame)
-        self.gantt_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-        plt.close(fig)  # Close the figure to prevent display in a separate window
-
-        # Add update button
-        ttk.Button(
-            self.gantt_tab, text="Update Gantt Chart", command=self._update_gantt_chart
-        ).pack(pady=5)
-
     def _update_task_list(self):
         """Update the task list in the UI"""
         # Clear existing items
@@ -863,28 +1117,6 @@ class CCPMplannerGUI:
                 tk.END,
                 values=(resource_id, resource["name"], f"{resource['availability']}%"),
             )
-
-    def _update_gantt_chart(self):
-        """Update the Gantt chart"""
-        # Schedule tasks first
-        self.planner.schedule_tasks()
-
-        # Generate new chart - make sure it doesn't create a new window
-        plt.ioff()  # Turn off interactive mode to prevent new window
-        fig = self.planner.generate_gantt_chart()
-
-        # Update canvas
-        self.gantt_canvas.get_tk_widget().destroy()
-
-        # Create a frame for the Gantt chart if it doesn't exist
-        if not hasattr(self, "gantt_frame") or not self.gantt_frame.winfo_exists():
-            self.gantt_frame = ttk.Frame(self.gantt_tab)
-            self.gantt_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        # Create new canvas in the frame
-        self.gantt_canvas = FigureCanvasTkAgg(fig, self.gantt_frame)
-        self.gantt_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-        plt.close(fig)  # Close the figure to prevent display in a separate window
 
     def _add_task_dialog(self):
         """Open dialog to add a new task"""
@@ -1233,6 +1465,85 @@ class CCPMplannerGUI:
         ):
             self.planner.resource_manager.remove_resource(resource_id)
             self._update_resource_list()
+
+    # def _on_hover(self, event):
+    #     """Handle mouse hover event to show task tooltip"""
+    #     # If we're outside the axes, hide the tooltip
+    #     if event.inaxes is None:
+    #         self.tooltip.place_forget()
+    #         return
+
+    #     # Check if the mouse is over any task bar
+    #     for task_id, (bar, task) in self.task_bars.items():
+    #         contains, _ = bar.contains(event)
+    #         if contains:
+    #             # Format the tooltip text
+    #             tooltip_text = (
+    #                 f"Task: {task.name} (ID: {task.task_id})\n"
+    #                 f"Duration: {task.duration} days\n"
+    #                 f"Start: Day {task.start_date}, End: Day {task.end_date}\n"
+    #                 f"Resources: {', '.join(task.resources) if task.resources else 'None'}\n"
+    #                 f"Predecessors: {task.predecessors if task.predecessors else 'None'}\n"
+    #                 f"Critical: {'Yes' if task.is_critical else 'No'}"
+    #             )
+
+    #             # Include safe/aggressive duration if available
+    #             if hasattr(task, "safe_duration") and hasattr(
+    #                 task, "aggressive_duration"
+    #             ):
+    #                 tooltip_text += f"\nSafe Duration: {task.safe_duration}"
+    #                 tooltip_text += f"\nAggressive Duration: {task.aggressive_duration}"
+
+    #             # Update the tooltip text
+    #             self.tooltip.config(text=tooltip_text)
+
+    #             # Position the tooltip near the mouse but not under it
+    #             self.tooltip.place(x=event.x + 15, y=event.y + 10)
+    #             return
+
+    #     # If not over any task, hide the tooltip
+    #     self.tooltip.place_forget()
+
+    def _setup_gantt_tab(self):
+        """Set up the Gantt chart tab - simplified version without task details panel"""
+        # Create a frame for the Gantt chart
+        self.gantt_frame = ttk.Frame(self.gantt_tab)
+        self.gantt_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Create the Gantt chart with interactive mode off
+        plt.ioff()  # Turn off interactive mode
+        fig = self.planner.generate_gantt_chart()
+
+        # Create canvas for the chart
+        self.gantt_canvas = FigureCanvasTkAgg(fig, self.gantt_frame)
+        canvas_widget = self.gantt_canvas.get_tk_widget()
+        canvas_widget.pack(fill=tk.BOTH, expand=True)
+
+        plt.close(fig)  # Close the figure to prevent display in a separate window
+
+        # Add update button
+        ttk.Button(
+            self.gantt_tab, text="Update Gantt Chart", command=self._update_gantt_chart
+        ).pack(pady=5)
+
+    def _update_gantt_chart(self):
+        """Update the Gantt chart - simplified version"""
+        # Schedule tasks first
+        self.planner.schedule_tasks()
+
+        # Generate new chart - make sure it doesn't create a new window
+        plt.ioff()  # Turn off interactive mode to prevent new window
+        fig = self.planner.generate_gantt_chart()
+
+        # Update canvas
+        self.gantt_canvas.get_tk_widget().destroy()
+
+        # Create new canvas in the frame
+        self.gantt_canvas = FigureCanvasTkAgg(fig, self.gantt_frame)
+        canvas_widget = self.gantt_canvas.get_tk_widget()
+        canvas_widget.pack(fill=tk.BOTH, expand=True)
+
+        plt.close(fig)  # Close the figure to prevent display in a separate window
 
 
 def main():
