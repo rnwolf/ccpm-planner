@@ -30,6 +30,17 @@ class Task:
         self.end_date = 0
         self.is_critical = False
 
+        # For Larry Leech example datasets
+        self.safe_duration = duration  # Safe estimate
+        try:
+            # Try to convert duration to int and then calculate aggressive duration
+            self.aggressive_duration = int(
+                int(duration) * 0.5
+            )  # Aggressive estimate by default
+        except (ValueError, TypeError):
+            # If conversion fails, set aggressive duration to same as safe duration
+            self.aggressive_duration = duration
+
     def get_ID(self) -> int:
         """Get the task ID"""
         return self.task_id
@@ -41,6 +52,99 @@ class Task:
     def set_preds(self, preds: str) -> None:
         """Set the predecessors string"""
         self.predecessors = preds
+
+
+class SampleDataset:
+    """Class to hold sample dataset information"""
+
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        resources: Dict[str, int],
+        tasks: List[Tuple],
+        expected_chain: List[str] = None,
+    ):
+        self.name = name
+        self.description = description
+        self.resources = resources  # Dict of resource_id: availability
+        self.tasks = tasks  # List of task parameter tuples
+        self.expected_chain = expected_chain  # Expected critical chain task names
+
+    def load_into_simulator(self, simulator):
+        """Load this dataset into the provided simulator"""
+        # Add resources
+        for resource_id, availability in self.resources.items():
+            simulator.resource_manager.add_resource(
+                resource_id, resource_id, availability * 100
+            )
+
+        # Add tasks
+        task_id = 1
+        for task_data in self.tasks:
+            if len(task_data) >= 5 and isinstance(
+                task_data[0], str
+            ):  # Larry Leech format with string names
+                name, safe_duration, aggressive_duration, dependencies, resource = (
+                    task_data
+                )
+                # Convert dependencies from task names to task IDs
+                pred_ids = []
+                for dep_name in dependencies:
+                    for existing_task in simulator.tasks:
+                        if existing_task.name == dep_name:
+                            pred_ids.append(str(existing_task.task_id))
+                            break
+
+                # Create the task
+                task = simulator.add_task(
+                    task_id,
+                    name,
+                    int(safe_duration),  # Ensure safe duration is an integer
+                    [resource] if resource else [],
+                    ",".join(pred_ids),
+                )
+
+                # Set specific durations
+                task.safe_duration = int(safe_duration)
+                task.aggressive_duration = int(aggressive_duration)
+            else:  # Standard format
+                # Unpack task data
+                if len(task_data) == 6:
+                    task_id_val, name, duration, resources, predecessors, completion = (
+                        task_data
+                    )
+                else:
+                    # Default values for missing parameters
+                    task_id_val, name, duration = (
+                        task_data[0],
+                        task_data[1],
+                        task_data[2],
+                    )
+                    resources = task_data[3] if len(task_data) > 3 else []
+                    predecessors = task_data[4] if len(task_data) > 4 else ""
+                    completion = task_data[5] if len(task_data) > 5 else 0.0
+
+                # Create the task
+                simulator.add_task(
+                    int(task_id_val),
+                    name,
+                    int(duration),
+                    resources,
+                    predecessors,
+                    float(completion),
+                )
+
+                # Update task_id for next loop iteration
+                task_id = int(task_id_val) + 1
+                continue
+
+            task_id += 1
+
+        # Schedule tasks
+        simulator.schedule_tasks()
+
+        return simulator
 
 
 class ResourceManager:
@@ -75,6 +179,91 @@ class CriticalChainSimulator:
         self.resource_manager = ResourceManager()
         self.chains = []  # Collections of tasks forming chains
         self.project_buffer = 0
+        self.dataset_name = "Default"
+        self.sample_datasets = self._create_sample_datasets()
+
+    def _create_sample_datasets(self):
+        """Create sample datasets"""
+        datasets = {}
+
+        # Default dataset
+        default_resources = {"R1": 1, "R2": 1, "R3": 1}
+        default_tasks = [
+            (1, "Project Planning", 5, ["R1"], ""),
+            (2, "Design", 10, ["R1", "R2"], "1"),
+            (3, "Development Phase 1", 15, ["R2"], "2"),
+            (4, "Development Phase 2", 12, ["R1"], "2"),
+            (5, "Testing", 8, ["R3"], "3,4"),
+            (6, "Documentation", 7, ["R1"], "5"),
+            (7, "Deployment", 4, ["R1", "R2", "R3"], "5,6"),
+        ]
+        datasets["Default"] = SampleDataset(
+            "Default",
+            "Default sample project with 7 tasks",
+            default_resources,
+            default_tasks,
+        )
+
+        # Small example from Larry Leech's book
+        small_resources = {"Red": 1, "Green": 1, "Magenta": 1, "Blue": 1}
+        small_tasks = [
+            ("T1.1", 30, 15, [], "Red"),
+            ("T1.2", 20, 10, ["T1.1"], "Green"),
+            ("T3", 30, 15, ["T1.2", "T2.2"], "Magenta"),
+            ("T2.1", 20, 10, [], "Blue"),
+            ("T2.2", 10, 5, ["T2.1"], "Green"),
+        ]
+        datasets["Larry_Small"] = SampleDataset(
+            "Larry_Small",
+            "Small example from Larry Leech's book on CCPM",
+            small_resources,
+            small_tasks,
+            ["T1.1", "T1.2", "T2.2", "T3"],
+        )
+
+        # Large example from Larry Leech's book
+        large_resources = {"Red": 1, "Green": 1, "Magenta": 1, "Blue": 1, "Black": 1}
+        large_tasks = [
+            ("A-1", 10, 5, [], "Magenta"),
+            ("A-2", 20, 10, ["A-1"], "Black"),
+            ("A-3", 30, 15, ["A-2"], "Green"),
+            ("A-4", 20, 10, ["A-3"], "Red"),
+            ("A-5", 40, 20, ["A-4", "B-4"], "Magenta"),
+            ("A-6", 28, 14, ["A-5"], "Red"),
+            ("B-2", 20, 10, [], "Magenta"),
+            ("B-3", 20, 10, ["B-2"], "Blue"),
+            ("B-4", 10, 5, ["B-3"], "Red"),
+            ("C-3", 30, 15, [], "Blue"),
+            ("C-4", 20, 10, ["C-3"], "Green"),
+            ("C-5", 30, 15, ["C-4", "D-4"], "Red"),
+            ("C-6", 10, 5, ["C-5"], "Magenta"),
+            ("D-3", 40, 20, [], "Blue"),
+            ("D-4", 10, 5, ["D-3"], "Green"),
+            ("Done", 0, 0, ["C-6", "A-6"], "Black"),
+        ]
+        datasets["Larry_Large"] = SampleDataset(
+            "Larry_Large",
+            "Large example from Larry Leech's book on CCPM",
+            large_resources,
+            large_tasks,
+            ["A-1", "A-2", "A-3", "A-4", "B-4", "A-5", "A-6", "C-5", "C-6"],
+        )
+
+        return datasets
+
+    def load_sample_dataset(self, dataset_name):
+        """Load a sample dataset by name"""
+        if dataset_name in self.sample_datasets:
+            self.dataset_name = dataset_name
+
+            # Clear existing data before loading
+            self.tasks = []
+            self.resource_manager = ResourceManager()
+
+            # Load the dataset
+            self.sample_datasets[dataset_name].load_into_simulator(self)
+            return True
+        return False
 
     def add_task(
         self,
@@ -405,25 +594,27 @@ class CCPMSimulatorGUI:
 
     def _create_sample_data(self):
         """Create sample data for demonstration"""
-        # Add some resources
-        self.simulator.resource_manager.add_resource("R1", "Developer 1")
-        self.simulator.resource_manager.add_resource("R2", "Developer 2")
-        self.simulator.resource_manager.add_resource("R3", "Tester")
-
-        # Add some tasks
-        self.simulator.add_task(1, "Project Planning", 5, ["R1"])
-        self.simulator.add_task(2, "Design", 10, ["R1", "R2"], "1")
-        self.simulator.add_task(3, "Development Phase 1", 15, ["R2"], "2")
-        self.simulator.add_task(4, "Development Phase 2", 12, ["R1"], "2")
-        self.simulator.add_task(5, "Testing", 8, ["R3"], "3,4")
-        self.simulator.add_task(6, "Documentation", 7, ["R1"], "5")
-        self.simulator.add_task(7, "Deployment", 4, ["R1", "R2", "R3"], "5,6")
-
-        # Schedule the tasks
-        self.simulator.schedule_tasks()
+        # Load default dataset
+        self.simulator.load_sample_dataset("Default")
 
     def _create_widgets(self):
         """Create GUI widgets"""
+        # Create top menu
+        self.menu_bar = tk.Menu(self.root)
+        self.root.config(menu=self.menu_bar)
+
+        # Create dataset menu
+        self.dataset_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.menu_bar.add_cascade(label="Datasets", menu=self.dataset_menu)
+
+        # Add dataset options
+        for dataset_name in self.simulator.sample_datasets:
+            dataset = self.simulator.sample_datasets[dataset_name]
+            self.dataset_menu.add_command(
+                label=f"{dataset_name} - {dataset.description}",
+                command=lambda name=dataset_name: self._load_dataset(name),
+            )
+
         # Create notebook (tabbed interface)
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -451,6 +642,19 @@ class CCPMSimulatorGUI:
         # Set up the fever chart tab
         self._setup_fever_tab()
 
+    def _load_dataset(self, dataset_name):
+        """Load a dataset by name"""
+        if self.simulator.load_sample_dataset(dataset_name):
+            self._update_task_list()
+            self._update_resource_list()
+            self._update_gantt_chart()
+            self._update_fever_chart()
+            tk.messagebox.showinfo(
+                "Dataset Loaded", f"Dataset '{dataset_name}' loaded successfully"
+            )
+        else:
+            tk.messagebox.showerror("Error", f"Failed to load dataset '{dataset_name}'")
+
     def _setup_task_tab(self):
         """Set up the task management tab"""
         # Create frames
@@ -459,6 +663,19 @@ class CCPMSimulatorGUI:
 
         task_edit_frame = ttk.Frame(self.task_tab)
         task_edit_frame.pack(side=tk.RIGHT, fill=tk.BOTH, padx=5, pady=5)
+
+        # Dataset info
+        dataset_frame = ttk.Frame(task_list_frame)
+        dataset_frame.pack(fill=tk.X, pady=5)
+
+        self.dataset_label = ttk.Label(
+            dataset_frame, text=f"Current Dataset: {self.simulator.dataset_name}"
+        )
+        self.dataset_label.pack(side=tk.LEFT, padx=5)
+
+        ttk.Button(
+            dataset_frame, text="Switch Dataset", command=self._show_dataset_menu
+        ).pack(side=tk.RIGHT, padx=5)
 
         # Task list
         ttk.Label(task_list_frame, text="Task List").pack(anchor=tk.W)
@@ -491,8 +708,51 @@ class CCPMSimulatorGUI:
             task_button_frame, text="Schedule Tasks", command=self._schedule_tasks
         ).pack(side=tk.RIGHT, padx=5)
 
+        # Add a checkbox for using aggressive durations
+        self.use_aggressive_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            task_button_frame,
+            text="Use Aggressive Durations",
+            variable=self.use_aggressive_var,
+            command=self._toggle_durations,
+        ).pack(side=tk.RIGHT, padx=5)
+
         # Populate task list
         self._update_task_list()
+
+    def _show_dataset_menu(self):
+        """Show dataset selection menu"""
+        # Create a popup menu
+        popup = tk.Menu(self.root, tearoff=0)
+
+        # Add dataset options
+        for dataset_name in self.simulator.sample_datasets:
+            dataset = self.simulator.sample_datasets[dataset_name]
+            popup.add_command(
+                label=f"{dataset_name} - {dataset.description}",
+                command=lambda name=dataset_name: self._load_dataset(name),
+            )
+
+        # Display the popup menu
+        try:
+            popup.tk_popup(self.root.winfo_pointerx(), self.root.winfo_pointery())
+        finally:
+            # Make sure to release the grab
+            popup.grab_release()
+
+    def _toggle_durations(self):
+        """Toggle between safe and aggressive durations"""
+        use_aggressive = self.use_aggressive_var.get()
+
+        for task in self.simulator.tasks:
+            if hasattr(task, "aggressive_duration") and hasattr(task, "safe_duration"):
+                if use_aggressive:
+                    task.duration = task.aggressive_duration
+                else:
+                    task.duration = task.safe_duration
+
+        self._update_task_list()
+        self._schedule_tasks()
 
     def _setup_resource_tab(self):
         """Set up the resource management tab"""
@@ -585,6 +845,12 @@ class CCPMSimulatorGUI:
         # Clear existing items
         for item in self.task_tree.get_children():
             self.task_tree.delete(item)
+
+        # Update dataset label
+        if hasattr(self, "dataset_label"):
+            self.dataset_label.config(
+                text=f"Current Dataset: {self.simulator.dataset_name}"
+            )
 
         # Add tasks to the treeview
         for task in self.simulator.tasks:
