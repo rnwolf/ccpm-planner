@@ -189,19 +189,20 @@ class CriticalChainSimulator:
         # Default dataset
         default_resources = {"Blue": 1, "Magenta": 1, "Green": 1}
         default_tasks = [
-            (1, "Project Planning", 5, ["Blue"], ""),
-            (2, "Design", 10, ["Blue", "Magenta"], "1"),
-            (3, "Development Phase 1", 15, ["Magenta"], "2"),
-            (4, "Development Phase 2", 12, ["Blue"], "2"),
-            (5, "Testing", 8, ["Green"], "3,4"),
-            (6, "Documentation", 7, ["Blue"], "5"),
-            (7, "Deployment", 4, ["Blue", "Magenta", "Green"], "5,6"),
+            ("1", 10, 5, [], "Blue"),  # "Project Planning"
+            ("2", 20, 10, ["1"], "Blue"),  # "Design"
+            ("3", 30, 15, ["2"], "Magenta"),  # "Development Phase 1"
+            ("4", 24, 12, ["2"], "Blue"),  # "Development Phase 2"
+            ("5", 16, 8, ["3", "4"], "Green"),  # "Testing"
+            ("6", 14, 7, ["5"], "Blue"),  # "Documentation"
+            ("7", 8, 4, ["5", "6"], "Blue"),  # "Deployment"
         ]
         datasets["Default"] = SampleDataset(
             "Default",
             "Default sample project with 7 tasks",
             default_resources,
             default_tasks,
+            [],
         )
 
         # Small example from Larry Leech's book
