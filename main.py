@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 from typing import List, Dict, Tuple, Optional
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 
@@ -273,6 +273,8 @@ class CriticalChainSimulator:
 
     def generate_gantt_chart(self, filename: str = None) -> plt.Figure:
         """Generate Gantt chart"""
+        # Create figure with interactive mode off to prevent popup window
+        plt.ioff()
         fig, ax = plt.subplots(figsize=(12, 6))
 
         # Sort tasks by start date
@@ -336,8 +338,8 @@ class CriticalChainSimulator:
 
     def generate_fever_chart(self, filename: str = None) -> plt.Figure:
         """Generate fever chart for project buffer consumption"""
-        # This is a placeholder - in a real implementation, this would track
-        # buffer consumption over time
+        # Create figure with interactive mode off to prevent popup window
+        plt.ioff()
         fig, ax = plt.subplots(figsize=(10, 6))
 
         # Example data points (in a real app, these would come from project tracking)
@@ -544,12 +546,14 @@ class CCPMSimulatorGUI:
         self.gantt_frame = ttk.Frame(self.gantt_tab)
         self.gantt_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Create the Gantt chart
+        # Create the Gantt chart with interactive mode off
+        plt.ioff()  # Turn off interactive mode
         fig = self.simulator.generate_gantt_chart()
 
         # Create canvas for the chart
         self.gantt_canvas = FigureCanvasTkAgg(fig, self.gantt_frame)
         self.gantt_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        plt.close(fig)  # Close the figure to prevent display in a separate window
 
         # Add update button
         ttk.Button(
@@ -562,12 +566,14 @@ class CCPMSimulatorGUI:
         self.fever_frame = ttk.Frame(self.fever_tab)
         self.fever_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Create the fever chart
+        # Create the fever chart with interactive mode off
+        plt.ioff()  # Turn off interactive mode
         fig = self.simulator.generate_fever_chart()
 
         # Create canvas for the chart
         self.fever_canvas = FigureCanvasTkAgg(fig, self.fever_frame)
         self.fever_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        plt.close(fig)  # Close the figure to prevent display in a separate window
 
         # Add update button
         ttk.Button(
@@ -618,7 +624,8 @@ class CCPMSimulatorGUI:
         # Schedule tasks first
         self.simulator.schedule_tasks()
 
-        # Generate new chart
+        # Generate new chart - make sure it doesn't create a new window
+        plt.ioff()  # Turn off interactive mode to prevent new window
         fig = self.simulator.generate_gantt_chart()
 
         # Update canvas
@@ -632,10 +639,12 @@ class CCPMSimulatorGUI:
         # Create new canvas in the frame
         self.gantt_canvas = FigureCanvasTkAgg(fig, self.gantt_frame)
         self.gantt_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        plt.close(fig)  # Close the figure to prevent display in a separate window
 
     def _update_fever_chart(self):
         """Update the fever chart"""
-        # Generate new chart
+        # Generate new chart - make sure it doesn't create a new window
+        plt.ioff()  # Turn off interactive mode to prevent new window
         fig = self.simulator.generate_fever_chart()
 
         # Update canvas
@@ -649,6 +658,7 @@ class CCPMSimulatorGUI:
         # Create new canvas in the frame
         self.fever_canvas = FigureCanvasTkAgg(fig, self.fever_frame)
         self.fever_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        plt.close(fig)  # Close the figure to prevent display in a separate window
 
     def _add_task_dialog(self):
         """Open dialog to add a new task"""
@@ -1030,4 +1040,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-# This code is a simplified implementation of a Critical Chain Project Management simulator using Tkinter for the GUI and NetworkX for task scheduling and dependency management.
