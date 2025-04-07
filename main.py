@@ -18,14 +18,12 @@ class Task:
         duration: int,
         resources: List[str] = None,
         predecessors: str = "",
-        completion: float = 0.0,
     ):
         self.task_id = task_id
         self.name = name
         self.duration = duration
         self.resources = resources if resources else []
         self.predecessors = predecessors
-        self.completion = completion
         self.start_date = 0
         self.end_date = 0
         self.is_critical = False
@@ -71,11 +69,11 @@ class SampleDataset:
         self.tasks = tasks  # List of task parameter tuples
         self.expected_chain = expected_chain  # Expected critical chain task names
 
-    def load_into_simulator(self, simulator):
-        """Load this dataset into the provided simulator"""
+    def load_into_planner(self, planner):
+        """Load this dataset into the provided planner"""
         # Add resources
         for resource_id, availability in self.resources.items():
-            simulator.resource_manager.add_resource(
+            planner.resource_manager.add_resource(
                 resource_id, resource_id, availability * 100
             )
 
@@ -91,13 +89,13 @@ class SampleDataset:
                 # Convert dependencies from task names to task IDs
                 pred_ids = []
                 for dep_name in dependencies:
-                    for existing_task in simulator.tasks:
+                    for existing_task in planner.tasks:
                         if existing_task.name == dep_name:
                             pred_ids.append(str(existing_task.task_id))
                             break
 
                 # Create the task
-                task = simulator.add_task(
+                task = planner.add_task(
                     task_id,
                     name,
                     int(safe_duration),  # Ensure safe duration is an integer
@@ -110,10 +108,8 @@ class SampleDataset:
                 task.aggressive_duration = int(aggressive_duration)
             else:  # Standard format
                 # Unpack task data
-                if len(task_data) == 6:
-                    task_id_val, name, duration, resources, predecessors, completion = (
-                        task_data
-                    )
+                if len(task_data) == 5:
+                    task_id_val, name, duration, resources, predecessors = task_data
                 else:
                     # Default values for missing parameters
                     task_id_val, name, duration = (
@@ -123,16 +119,14 @@ class SampleDataset:
                     )
                     resources = task_data[3] if len(task_data) > 3 else []
                     predecessors = task_data[4] if len(task_data) > 4 else ""
-                    completion = task_data[5] if len(task_data) > 5 else 0.0
 
                 # Create the task
-                simulator.add_task(
+                planner.add_task(
                     int(task_id_val),
                     name,
                     int(duration),
                     resources,
                     predecessors,
-                    float(completion),
                 )
 
                 # Update task_id for next loop iteration
@@ -142,9 +136,9 @@ class SampleDataset:
             task_id += 1
 
         # Schedule tasks
-        simulator.schedule_tasks()
+        planner.schedule_tasks()
 
-        return simulator
+        return planner
 
 
 class ResourceManager:
@@ -171,8 +165,8 @@ class ResourceManager:
         return self.resources
 
 
-class CriticalChainSimulator:
-    """Main class for the Critical Chain Project Management simulator"""
+class CriticalChainplanner:
+    """Main class for the Critical Chain Project Management planner"""
 
     def __init__(self):
         self.tasks = []
@@ -262,7 +256,7 @@ class CriticalChainSimulator:
             self.resource_manager = ResourceManager()
 
             # Load the dataset
-            self.sample_datasets[dataset_name].load_into_simulator(self)
+            self.sample_datasets[dataset_name].load_into_planner(self)
             return True
         return False
 
@@ -273,10 +267,9 @@ class CriticalChainSimulator:
         duration: int,
         resources: List[str] = None,
         predecessors: str = "",
-        completion: float = 0.0,
     ) -> Task:
         """Add a task to the project"""
-        task = Task(task_id, name, duration, resources, predecessors, completion)
+        task = Task(task_id, name, duration, resources, predecessors)
         self.tasks.append(task)
         return task
 
@@ -510,11 +503,11 @@ class CriticalChainSimulator:
                 bar[0].set_edgecolor("yellow")
                 bar[0].set_linewidth(2)
 
-            # Add task name and completion percentage
+            # Add task name
             ax.text(
                 start + duration / 2,
                 i,
-                f"{task.name} ({task.completion:.0%})",
+                f"{task.name}",
                 ha="center",
                 va="center",
                 color="black",
@@ -589,67 +582,16 @@ class CriticalChainSimulator:
 
         return fig
 
-    def generate_fever_chart(self, filename: str = None) -> plt.Figure:
-        """Generate fever chart for project buffer consumption"""
-        # Create figure with interactive mode off to prevent popup window
-        plt.ioff()
-        fig, ax = plt.subplots(figsize=(10, 6))
 
-        # Example data points (in a real app, these would come from project tracking)
-        completion_percentages = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-        buffer_consumed = [0, 5, 12, 15, 20, 25, 28, 35, 40, 45, 50]
-
-        # Plot the fever chart
-        ax.plot(completion_percentages, buffer_consumed, "o-", color="blue")
-
-        # Add reference lines
-        # Green zone (safe)
-        ax.fill_between([0, 33, 67, 100], [0, 33, 67, 100], color="green", alpha=0.2)
-
-        # Yellow zone (warning)
-        ax.fill_between(
-            [0, 33, 67, 100],
-            [33, 67, 100, 100],
-            [0, 33, 67, 100],
-            color="yellow",
-            alpha=0.2,
-        )
-
-        # Red zone (danger)
-        ax.fill_between(
-            [0, 33, 67, 100],
-            [100, 100, 100, 100],
-            [33, 67, 100, 100],
-            color="red",
-            alpha=0.2,
-        )
-
-        # Set chart title and labels
-        ax.set_title("Project Buffer Consumption Fever Chart")
-        ax.set_xlabel("Project Completion (%)")
-        ax.set_ylabel("Buffer Consumption (%)")
-        ax.set_xlim(0, 100)
-        ax.set_ylim(0, 100)
-        ax.grid(True)
-
-        plt.tight_layout()
-
-        # Save if filename is provided
-        if filename:
-            plt.savefig(filename)
-
-        return fig
-
-
-class CCPMSimulatorGUI:
-    """GUI for the Critical Chain Project Management simulator"""
+class CCPMplannerGUI:
+    """GUI for the Critical Chain Project Management planner"""
 
     def __init__(self, root):
         self.root = root
-        self.root.title("Critical Chain Project Management Simulator")
+        self.root.title("Critical Chain Project Management planner")
         self.root.geometry("1200x800")
 
-        self.simulator = CriticalChainSimulator()
+        self.planner = CriticalChainplanner()
 
         # Initialize with some sample data
         self._create_sample_data()
@@ -659,7 +601,7 @@ class CCPMSimulatorGUI:
     def _create_sample_data(self):
         """Create sample data for demonstration"""
         # Load default dataset
-        self.simulator.load_sample_dataset("Default")
+        self.planner.load_sample_dataset("Default")
 
     def _create_widgets(self):
         """Create GUI widgets"""
@@ -672,8 +614,8 @@ class CCPMSimulatorGUI:
         self.menu_bar.add_cascade(label="Datasets", menu=self.dataset_menu)
 
         # Add dataset options
-        for dataset_name in self.simulator.sample_datasets:
-            dataset = self.simulator.sample_datasets[dataset_name]
+        for dataset_name in self.planner.sample_datasets:
+            dataset = self.planner.sample_datasets[dataset_name]
             self.dataset_menu.add_command(
                 label=f"{dataset_name} - {dataset.description}",
                 command=lambda name=dataset_name: self._load_dataset(name),
@@ -687,12 +629,10 @@ class CCPMSimulatorGUI:
         self.task_tab = ttk.Frame(self.notebook)
         self.resource_tab = ttk.Frame(self.notebook)
         self.gantt_tab = ttk.Frame(self.notebook)
-        self.fever_tab = ttk.Frame(self.notebook)
 
         self.notebook.add(self.task_tab, text="Tasks")
         self.notebook.add(self.resource_tab, text="Resources")
         self.notebook.add(self.gantt_tab, text="Gantt Chart")
-        self.notebook.add(self.fever_tab, text="Fever Chart")
 
         # Set up the task tab
         self._setup_task_tab()
@@ -703,12 +643,9 @@ class CCPMSimulatorGUI:
         # Set up the Gantt chart tab
         self._setup_gantt_tab()
 
-        # Set up the fever chart tab
-        self._setup_fever_tab()
-
     def _load_dataset(self, dataset_name):
         """Load a dataset by name"""
-        if self.simulator.load_sample_dataset(dataset_name):
+        if self.planner.load_sample_dataset(dataset_name):
             self._update_task_list()
             self._update_resource_list()
             self._update_gantt_chart()
@@ -733,7 +670,7 @@ class CCPMSimulatorGUI:
         dataset_frame.pack(fill=tk.X, pady=5)
 
         self.dataset_label = ttk.Label(
-            dataset_frame, text=f"Current Dataset: {self.simulator.dataset_name}"
+            dataset_frame, text=f"Current Dataset: {self.planner.dataset_name}"
         )
         self.dataset_label.pack(side=tk.LEFT, padx=5)
 
@@ -745,7 +682,7 @@ class CCPMSimulatorGUI:
         ttk.Label(task_list_frame, text="Task List").pack(anchor=tk.W)
 
         # Create Treeview for task list
-        columns = ("ID", "Name", "Duration", "Resources", "Predecessors", "Completion")
+        columns = ("ID", "Name", "Duration", "Resources", "Predecessors")
         self.task_tree = ttk.Treeview(task_list_frame, columns=columns, show="headings")
 
         # Define headings
@@ -790,8 +727,8 @@ class CCPMSimulatorGUI:
         popup = tk.Menu(self.root, tearoff=0)
 
         # Add dataset options
-        for dataset_name in self.simulator.sample_datasets:
-            dataset = self.simulator.sample_datasets[dataset_name]
+        for dataset_name in self.planner.sample_datasets:
+            dataset = self.planner.sample_datasets[dataset_name]
             popup.add_command(
                 label=f"{dataset_name} - {dataset.description}",
                 command=lambda name=dataset_name: self._load_dataset(name),
@@ -808,7 +745,7 @@ class CCPMSimulatorGUI:
         """Toggle between safe and aggressive durations"""
         use_aggressive = self.use_aggressive_var.get()
 
-        for task in self.simulator.tasks:
+        for task in self.planner.tasks:
             if hasattr(task, "aggressive_duration") and hasattr(task, "safe_duration"):
                 if use_aggressive:
                     task.duration = task.aggressive_duration
@@ -872,7 +809,7 @@ class CCPMSimulatorGUI:
 
         # Create the Gantt chart with interactive mode off
         plt.ioff()  # Turn off interactive mode
-        fig = self.simulator.generate_gantt_chart()
+        fig = self.planner.generate_gantt_chart()
 
         # Create canvas for the chart
         self.gantt_canvas = FigureCanvasTkAgg(fig, self.gantt_frame)
@@ -884,26 +821,6 @@ class CCPMSimulatorGUI:
             self.gantt_tab, text="Update Gantt Chart", command=self._update_gantt_chart
         ).pack(pady=5)
 
-    def _setup_fever_tab(self):
-        """Set up the fever chart tab"""
-        # Create a frame for the fever chart
-        self.fever_frame = ttk.Frame(self.fever_tab)
-        self.fever_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        # Create the fever chart with interactive mode off
-        plt.ioff()  # Turn off interactive mode
-        fig = self.simulator.generate_fever_chart()
-
-        # Create canvas for the chart
-        self.fever_canvas = FigureCanvasTkAgg(fig, self.fever_frame)
-        self.fever_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-        plt.close(fig)  # Close the figure to prevent display in a separate window
-
-        # Add update button
-        ttk.Button(
-            self.fever_tab, text="Update Fever Chart", command=self._update_fever_chart
-        ).pack(pady=5)
-
     def _update_task_list(self):
         """Update the task list in the UI"""
         # Clear existing items
@@ -913,11 +830,11 @@ class CCPMSimulatorGUI:
         # Update dataset label
         if hasattr(self, "dataset_label"):
             self.dataset_label.config(
-                text=f"Current Dataset: {self.simulator.dataset_name}"
+                text=f"Current Dataset: {self.planner.dataset_name}"
             )
 
         # Add tasks to the treeview
-        for task in self.simulator.tasks:
+        for task in self.planner.tasks:
             resources = ", ".join(task.resources)
             self.task_tree.insert(
                 "",
@@ -928,7 +845,6 @@ class CCPMSimulatorGUI:
                     task.duration,
                     resources,
                     task.predecessors,
-                    f"{task.completion:.0%}",
                 ),
             )
 
@@ -942,7 +858,7 @@ class CCPMSimulatorGUI:
         for (
             resource_id,
             resource,
-        ) in self.simulator.resource_manager.get_resources().items():
+        ) in self.planner.resource_manager.get_resources().items():
             self.resource_tree.insert(
                 "",
                 tk.END,
@@ -952,11 +868,11 @@ class CCPMSimulatorGUI:
     def _update_gantt_chart(self):
         """Update the Gantt chart"""
         # Schedule tasks first
-        self.simulator.schedule_tasks()
+        self.planner.schedule_tasks()
 
         # Generate new chart - make sure it doesn't create a new window
         plt.ioff()  # Turn off interactive mode to prevent new window
-        fig = self.simulator.generate_gantt_chart()
+        fig = self.planner.generate_gantt_chart()
 
         # Update canvas
         self.gantt_canvas.get_tk_widget().destroy()
@@ -969,25 +885,6 @@ class CCPMSimulatorGUI:
         # Create new canvas in the frame
         self.gantt_canvas = FigureCanvasTkAgg(fig, self.gantt_frame)
         self.gantt_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-        plt.close(fig)  # Close the figure to prevent display in a separate window
-
-    def _update_fever_chart(self):
-        """Update the fever chart"""
-        # Generate new chart - make sure it doesn't create a new window
-        plt.ioff()  # Turn off interactive mode to prevent new window
-        fig = self.simulator.generate_fever_chart()
-
-        # Update canvas
-        self.fever_canvas.get_tk_widget().destroy()
-
-        # Create a frame for the fever chart if it doesn't exist
-        if not hasattr(self, "fever_frame") or not self.fever_frame.winfo_exists():
-            self.fever_frame = ttk.Frame(self.fever_tab)
-            self.fever_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        # Create new canvas in the frame
-        self.fever_canvas = FigureCanvasTkAgg(fig, self.fever_frame)
-        self.fever_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         plt.close(fig)  # Close the figure to prevent display in a separate window
 
     def _add_task_dialog(self):
@@ -1043,15 +940,6 @@ class CCPMSimulatorGUI:
             row=4, column=1, sticky=tk.W + tk.E, padx=5, pady=5
         )
 
-        # Completion
-        ttk.Label(dialog, text="Completion (%):").grid(
-            row=5, column=0, sticky=tk.W, padx=5, pady=5
-        )
-        completion_var = tk.StringVar(value="0")
-        ttk.Entry(dialog, textvariable=completion_var).grid(
-            row=5, column=1, sticky=tk.W + tk.E, padx=5, pady=5
-        )
-
         # Save button
         def save_task():
             try:
@@ -1062,11 +950,8 @@ class CCPMSimulatorGUI:
                     r.strip() for r in resources_var.get().split(",") if r.strip()
                 ]
                 predecessors = predecessors_var.get()
-                completion = float(completion_var.get()) / 100
 
-                self.simulator.add_task(
-                    task_id, name, duration, resources, predecessors, completion
-                )
+                self.planner.add_task(task_id, name, duration, resources, predecessors)
                 self._update_task_list()
                 dialog.destroy()
 
@@ -1089,8 +974,8 @@ class CCPMSimulatorGUI:
         values = selected_item["values"]
         task_id = values[0]
 
-        # Find the task in the simulator
-        task = next((t for t in self.simulator.tasks if t.get_ID() == task_id), None)
+        # Find the task in the planner
+        task = next((t for t in self.planner.tasks if t.get_ID() == task_id), None)
         if not task:
             return
 
@@ -1146,15 +1031,6 @@ class CCPMSimulatorGUI:
             row=4, column=1, sticky=tk.W + tk.E, padx=5, pady=5
         )
 
-        # Completion
-        ttk.Label(dialog, text="Completion (%):").grid(
-            row=5, column=0, sticky=tk.W, padx=5, pady=5
-        )
-        completion_var = tk.StringVar(value=str(int(task.completion * 100)))
-        ttk.Entry(dialog, textvariable=completion_var).grid(
-            row=5, column=1, sticky=tk.W + tk.E, padx=5, pady=5
-        )
-
         # Save button
         def save_task():
             try:
@@ -1165,7 +1041,6 @@ class CCPMSimulatorGUI:
                     r.strip() for r in resources_var.get().split(",") if r.strip()
                 ]
                 task.predecessors = predecessors_var.get()
-                task.completion = float(completion_var.get()) / 100
 
                 self._update_task_list()
                 dialog.destroy()
@@ -1192,13 +1067,13 @@ class CCPMSimulatorGUI:
 
         # Confirm deletion
         if tk.messagebox.askyesno("Confirm Deletion", f"Delete task {task_id}?"):
-            self.simulator.remove_task(task_id)
+            self.planner.remove_task(task_id)
             self._update_task_list()
 
     def _schedule_tasks(self):
         """Schedule all tasks"""
         try:
-            self.simulator.schedule_tasks()
+            self.planner.schedule_tasks()
             self._update_task_list()
             self._update_gantt_chart()
             tk.messagebox.showinfo("Success", "Tasks scheduled successfully")
@@ -1250,7 +1125,7 @@ class CCPMSimulatorGUI:
                 if not resource_id or not name:
                     raise ValueError("Resource ID and Name are required")
 
-                self.simulator.resource_manager.add_resource(
+                self.planner.resource_manager.add_resource(
                     resource_id, name, availability
                 )
                 self._update_resource_list()
@@ -1277,8 +1152,8 @@ class CCPMSimulatorGUI:
         values = selected_item["values"]
         resource_id = values[0]
 
-        # Find the resource in the simulator
-        resource = self.simulator.resource_manager.get_resources().get(resource_id)
+        # Find the resource in the planner
+        resource = self.planner.resource_manager.get_resources().get(resource_id)
         if not resource:
             return
 
@@ -1357,14 +1232,14 @@ class CCPMSimulatorGUI:
         if tk.messagebox.askyesno(
             "Confirm Deletion", f"Delete resource {resource_id}?"
         ):
-            self.simulator.resource_manager.remove_resource(resource_id)
+            self.planner.resource_manager.remove_resource(resource_id)
             self._update_resource_list()
 
 
 def main():
     """Main function to start the application"""
     root = tk.Tk()
-    app = CCPMSimulatorGUI(root)
+    app = CCPMplannerGUI(root)
     root.mainloop()
 
 
