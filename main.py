@@ -649,7 +649,6 @@ class CCPMplannerGUI:
             self._update_task_list()
             self._update_resource_list()
             self._update_gantt_chart()
-            self._update_fever_chart()
             tk.messagebox.showinfo(
                 "Dataset Loaded", f"Dataset '{dataset_name}' loaded successfully"
             )
