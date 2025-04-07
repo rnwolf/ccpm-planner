@@ -187,15 +187,15 @@ class CriticalChainSimulator:
         datasets = {}
 
         # Default dataset
-        default_resources = {"R1": 1, "R2": 1, "R3": 1}
+        default_resources = {"Blue": 1, "Magenta": 1, "Green": 1}
         default_tasks = [
-            (1, "Project Planning", 5, ["R1"], ""),
-            (2, "Design", 10, ["R1", "R2"], "1"),
-            (3, "Development Phase 1", 15, ["R2"], "2"),
-            (4, "Development Phase 2", 12, ["R1"], "2"),
-            (5, "Testing", 8, ["R3"], "3,4"),
-            (6, "Documentation", 7, ["R1"], "5"),
-            (7, "Deployment", 4, ["R1", "R2", "R3"], "5,6"),
+            (1, "Project Planning", 5, ["Blue"], ""),
+            (2, "Design", 10, ["Blue", "Magenta"], "1"),
+            (3, "Development Phase 1", 15, ["Magenta"], "2"),
+            (4, "Development Phase 2", 12, ["Blue"], "2"),
+            (5, "Testing", 8, ["Green"], "3,4"),
+            (6, "Documentation", 7, ["Blue"], "5"),
+            (7, "Deployment", 4, ["Blue", "Magenta", "Green"], "5,6"),
         ]
         datasets["Default"] = SampleDataset(
             "Default",
@@ -469,16 +469,45 @@ class CriticalChainSimulator:
         # Sort tasks by start date
         sorted_tasks = sorted(self.tasks, key=lambda t: t.start_date)
 
+        # Define color mapping - converting resource color names to actual matplotlib colors
+        color_map = {
+            "Red": "red",
+            "Green": "green",
+            "Blue": "blue",
+            "Magenta": "magenta",
+            "Yellow": "yellow",
+            "Black": "black",
+            # Add fallback colors for other resources
+            "R1": "darkblue",
+            "R2": "darkgreen",
+            "R3": "darkred",
+        }
+
+        # Default color for tasks with multiple or no resources
+        default_task_color = "gray"
+
         # Plot tasks
         for i, task in enumerate(sorted_tasks):
             start = task.start_date
             duration = task.duration
 
-            # Different color for critical tasks
-            color = "red" if task.is_critical else "blue"
+            # Determine task color based on resource
+            if task.resources and len(task.resources) == 1:
+                # If task has exactly one resource, use that resource's color
+                resource = task.resources[0]
+                task_color = color_map.get(resource, default_task_color)
+            else:
+                # For multiple resources or no resources, use the default color
+                task_color = default_task_color
 
             # Plot the task bar
-            ax.barh(i, duration, left=start, color=color, alpha=0.6)
+            bar = ax.barh(i, duration, left=start, color=task_color, alpha=0.6)
+
+            # If this is a critical task, add yellow border
+            if task.is_critical:
+                # Get the bar patch and set its edge color and width
+                bar[0].set_edgecolor("yellow")
+                bar[0].set_linewidth(2)
 
             # Add task name and completion percentage
             ax.text(
@@ -493,13 +522,18 @@ class CriticalChainSimulator:
         # Add project buffer at the end
         if self.project_buffer > 0:
             project_end = max(t.end_date for t in self.tasks)
-            ax.barh(
+            buffer_bar = ax.barh(
                 len(sorted_tasks),
                 self.project_buffer,
                 left=project_end,
-                color="green",
+                color="gold",
                 alpha=0.6,
             )
+
+            # Add a yellow border to the buffer
+            buffer_bar[0].set_edgecolor("yellow")
+            buffer_bar[0].set_linewidth(2)
+
             ax.text(
                 project_end + self.project_buffer / 2,
                 len(sorted_tasks),
@@ -516,6 +550,35 @@ class CriticalChainSimulator:
         # Set chart title and labels
         ax.set_title("Project Gantt Chart with Critical Chain")
         ax.set_xlabel("Time")
+
+        # Add a legend for resource colors
+        unique_resources = set()
+        for task in self.tasks:
+            for resource in task.resources:
+                unique_resources.add(resource)
+
+        # Create legend patches
+        legend_patches = []
+        for resource in unique_resources:
+            color = color_map.get(resource, default_task_color)
+            patch = plt.Rectangle((0, 0), 1, 1, fc=color, alpha=0.6)
+            legend_patches.append((patch, resource))
+
+        # Add multiple resources patch
+        if any(len(task.resources) > 1 for task in self.tasks):
+            patch = plt.Rectangle((0, 0), 1, 1, fc=default_task_color, alpha=0.6)
+            legend_patches.append((patch, "Multiple Resources"))
+
+        # Add critical chain patch
+        critical_patch = plt.Rectangle((0, 0), 1, 1, fc="white", ec="yellow", lw=2)
+        legend_patches.append((critical_patch, "Critical Chain"))
+
+        # Add the legend
+        ax.legend(
+            [patch for patch, label in legend_patches],
+            [label for patch, label in legend_patches],
+            loc="lower right",
+        )
 
         plt.tight_layout()
 
